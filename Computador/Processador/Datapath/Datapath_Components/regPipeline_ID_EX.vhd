@@ -9,12 +9,16 @@ entity regPipeline_ID_EX is
 		reg_reset: in std_logic;
 		-- Signals Datapath
 		in_pc4:             in STD_LOGIC_VECTOR(31 downto 0);
-		in_rd1, in_rd2:   	in STD_LOGIC_VECTOR(31 downto 0);	 
+		in_rd1, in_rd2:   	in STD_LOGIC_VECTOR(31 downto 0);
+		in_intr31_26:  		in STD_LOGIC_VECTOR(5 downto 0);
+		in_intr25_21:  		in STD_LOGIC_VECTOR(4 downto 0);
 		in_intr20_16:  		in STD_LOGIC_VECTOR(4 downto 0);
 		in_intr15_11:  		in STD_LOGIC_VECTOR(4 downto 0);
 		in_signimm:     	in STD_LOGIC_VECTOR(31 downto 0); 	  
 		out_pc4: 			out STD_LOGIC_VECTOR(31 downto 0);
-		out_rd1, out_rd2:   out STD_LOGIC_VECTOR(31 downto 0);	 
+		out_rd1, out_rd2:   out STD_LOGIC_VECTOR(31 downto 0);
+		out_intr31_26:  	out STD_LOGIC_VECTOR(5 downto 0);
+		out_intr25_21:  	out STD_LOGIC_VECTOR(4 downto 0);
 		out_intr20_16:  	out STD_LOGIC_VECTOR(4 downto 0);
 		out_intr15_11:  	out STD_LOGIC_VECTOR(4 downto 0);
 		out_signimm:     	out STD_LOGIC_VECTOR(31 downto 0);
@@ -51,7 +55,9 @@ begin
 			-- Datapath
 			out_pc4       <= "--------------------------------";
 			out_rd1       <= "--------------------------------";
-			out_rd2       <= "--------------------------------"; 
+			out_rd2       <= "--------------------------------";
+			out_intr31_26 <= "------";
+			out_intr25_21 <= "-----";
 			out_intr20_16 <= "-----";
 			out_intr15_11 <= "-----";
 			out_signimm   <= "--------------------------------";
@@ -69,7 +75,9 @@ begin
 				-- Datapath
 				out_pc4       <= in_pc4;
 				out_rd1       <= in_rd1;
-				out_rd2       <= in_rd2; 
+				out_rd2       <= in_rd2; 	 
+				out_intr31_26 <= in_intr31_26;
+				out_intr25_21 <= in_intr25_21;
 				out_intr20_16 <= in_intr20_16;
 				out_intr15_11 <= in_intr15_11;
 				out_signimm   <= in_signimm;

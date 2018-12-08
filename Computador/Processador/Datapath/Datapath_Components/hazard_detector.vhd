@@ -6,12 +6,10 @@ entity hazard_detector is
 		pcsrc: in std_logic;
 		jump:  in std_logic;												 	
 		op_ID: in std_logic_vector(5 downto 0);
-		rs_ID, rt_ID: in std_logic_vector(4 downto 0);
-		regwrite_EX: in std_logic;
-		writereg_EX: in std_logic_vector(4 downto 0);
-		regwrite_MEM: in std_logic;
-		writereg_MEM: in std_logic_vector(4 downto 0);
-
+		rs_ID, rt_ID: in std_logic_vector(4 downto 0); 
+		writereg_EX: in std_logic_vector(4 downto 0);  
+		memtoreg_EX: in std_logic;
+		
 		enable_PCplus4: out std_logic;
 		enable_IF_ID:   out std_logic;
 		enable_ID_EX:   out std_logic;
@@ -42,31 +40,16 @@ begin
 		
 	eq_rs_EX <= '1' when (rs_ID = writereg_EX) else '0'; 	
 	eq_rt_EX <= '1' when (rt_ID = writereg_EX) else '0'; 
-	
-	eq_rs_MEM <= '1' when (rs_ID = writereg_MEM) else '0'; 	
-	eq_rt_MEM <= '1' when (rt_ID = writereg_MEM) else '0'; 
-		
+														   		
 	with op_ID select
 	eq_EX <= (eq_rs_EX or eq_rt_EX) when RTYPE | BEQ| BNE,
 			 (eq_rs_EX) when ADDI | ORI | LW, 
 	 		 (eq_rt_EX)	when SW,
 			 '0' when others;
-	
-	with op_ID select
-	eq_MEM <=(eq_rs_MEM or eq_rt_MEM) when RTYPE | BEQ| BNE,
-			 (eq_rs_MEM) when ADDI | ORI | LW, 
-	 		 (eq_rt_MEM) when SW,
-			 '0' when others;
-	
-	with regwrite_EX select
-		hazard_EX <= eq_EX when '1',
-					 '0' when others; 
-		
-	with regwrite_MEM select
-		hazard_MEM <= eq_MEM when '1',
-			          '0' when others;
-
-	hazard <= hazard_EX or hazard_MEM;
+								  					   	
+	with memtoreg_EX select
+	hazard <= eq_EX when '1',
+	     	  '0' when others; 									  
 	
 	enable_PCplus4 <= not hazard;
 	enable_IF_ID <= not hazard;

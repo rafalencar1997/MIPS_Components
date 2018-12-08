@@ -77,12 +77,16 @@ architecture struct of datapath is
 		reg_reset: in std_logic;
 		-- Signals Datapath
 		in_pc4:             in STD_LOGIC_VECTOR(31 downto 0);
-		in_rd1, in_rd2:   	in STD_LOGIC_VECTOR(31 downto 0);	 
+		in_rd1, in_rd2:   	in STD_LOGIC_VECTOR(31 downto 0);
+		in_intr31_26:  		in STD_LOGIC_VECTOR(5 downto 0);
+		in_intr25_21:  		in STD_LOGIC_VECTOR(4 downto 0);
 		in_intr20_16:  		in STD_LOGIC_VECTOR(4 downto 0);
 		in_intr15_11:  		in STD_LOGIC_VECTOR(4 downto 0);
 		in_signimm:     	in STD_LOGIC_VECTOR(31 downto 0); 	  
 		out_pc4: 			out STD_LOGIC_VECTOR(31 downto 0);
-		out_rd1, out_rd2:   out STD_LOGIC_VECTOR(31 downto 0);	 
+		out_rd1, out_rd2:   out STD_LOGIC_VECTOR(31 downto 0);
+		out_intr31_26:  	out STD_LOGIC_VECTOR(5 downto 0);
+		out_intr25_21:  	out STD_LOGIC_VECTOR(4 downto 0);
 		out_intr20_16:  	out STD_LOGIC_VECTOR(4 downto 0);
 		out_intr15_11:  	out STD_LOGIC_VECTOR(4 downto 0);
 		out_signimm:     	out STD_LOGIC_VECTOR(31 downto 0);
@@ -163,81 +167,115 @@ architecture struct of datapath is
 		out_memtoreg: out std_logic	
 	);	
   end component;
-  component hazard_detector
+  
+  component fowarding_unit
 	port(
+		op_EX: 		  in std_logic_vector(5 downto 0);
+		rs_EX: 		  in STD_LOGIC_VECTOR(4 downto 0);
+		rt_EX: 		  in STD_LOGIC_VECTOR(4 downto 0);
+		writereg_MEM: in STD_LOGIC_VECTOR(4 downto 0);
+		writereg_WB:  in STD_LOGIC_VECTOR(4 downto 0);
+		regWrite_MEM: in std_logic;		
+		regWrite_WB:  in std_logic;						 
+		selSrca:	  out std_logic_vector(1 downto 0);
+		selSrcB:	  out std_logic_vector(1 downto 0)
+	);
+  end component;
+  
+  component hazard_detector
+	port(			   	   
 		reset: in std_logic;
 		pcsrc: in std_logic;
-		jump:  in std_logic;
-														 	
+		jump:  in std_logic;												 	
 		op_ID: in std_logic_vector(5 downto 0);
-		rs_ID, rt_ID: in std_logic_vector(4 downto 0);
-		regwrite_EX: in std_logic;
-		writereg_EX: in std_logic_vector(4 downto 0);
-		regwrite_MEM: in std_logic;
-		writereg_MEM: in std_logic_vector(4 downto 0);
-
+		rs_ID, rt_ID: in std_logic_vector(4 downto 0); 
+		writereg_EX: in std_logic_vector(4 downto 0);  
+		memtoreg_EX: in std_logic;
+		
 		enable_PCplus4: out std_logic;
 		enable_IF_ID:   out std_logic;
 		enable_ID_EX:   out std_logic;
 		reset_IF_ID:    out std_logic;
 		reset_ID_EX:    out std_logic;
 		reset_EX_MEM:	out std_logic;
-		reset_MEM_WB:	out std_logic	
+		reset_MEM_WB:	out std_logic
 	);
   end component;
   
   -- Signals
-  signal zero_EX: STD_LOGIC;
-  signal enable_PCplus4, enable_IF_ID, enable_ID_EX: std_logic;
-  signal reset_IF_ID, reset_ID_EX, reset_EX_MEM, reset_MEM_WB:	 std_logic;
-  
-  signal pcsrc,
+  signal zero_EX,
+   		 enable_PCplus4, enable_IF_ID, enable_ID_EX,
+  		 reset_IF_ID, reset_ID_EX, reset_EX_MEM, reset_MEM_WB,
+  		 pcsrc,
   		 regwrite_EX, regwrite_MEM, regwrite_WB, 
 		 memtoreg_EX, memtoreg_MEM, memtoreg_WB,	
   		 memwrite_EX,
 		 branch_EX,   branch_MEM,
 		 Nbranch_EX,  Nbranch_MEM,
-  		 regdst_EX,  alusrc_EX : std_logic;
+  		 regdst_EX,   alusrc_EX : std_logic;
+	
+  signal selSrca, selSrcb: STD_LOGIC_VECTOR(1 downto 0);
+
   signal alucontrol_EX: STD_LOGIC_VECTOR(2 downto 0);
   
-  signal writereg_EX, writereg_MEM, writereg_WB: STD_LOGIC_VECTOR(4 downto 0);
-  signal rt_EX, rd_EX: STD_LOGIC_VECTOR(4 downto 0);
+  signal writereg_EX, writereg_MEM, writereg_WB,  
+  		 rs_EX, rt_EX, rd_EX: STD_LOGIC_VECTOR(4 downto 0);
+  
+  signal op_EX: STD_LOGIC_VECTOR(5 downto 0);
+	
   signal pcjump, pcnext, 
   		 pcnextbr, 
    		 pcplus4, pcplus4_ID, pcplus4_EX,  
          pcbranch, pcbranch_MEM,
 		 signimm, signimm_EX,
 		 signimmsh,
-         srca_ID, srca_EX,
-		 writedata_ID, writedata_EX,
+         srca_ID, srca_EX, srca_ALU,
+		 srcb_ALU, result,
+		 writedata_ID, writedata_EX, writedata_MUX,
 		 aluout_EX, aluout_WB,
-		 readdata_WB,
-		 srcb, result: STD_LOGIC_VECTOR(31 downto 0);
-  
+		 readdata_WB: STD_LOGIC_VECTOR(31 downto 0);
+		 												
+		 
   begin
   -- next PC logic
   pcjump <= pcplus4(31 downto 28) & instr_ID(25 downto 0) & "00";
-  pcreg: flopr generic map(32) port map(clk, reset, enable_PCplus4, pcnext, pc);
-  pcadd1: adder port map(pc, X"00000004", pcplus4);
-  immsh: sl2 port map(signimm_EX, signimmsh);
-  pcadd2: adder port map(pcplus4_EX, signimmsh, pcbranch);
-  pcbrmux: mux2 generic map(32) port map(pcplus4, pcbranch_MEM, 
-                                         pcsrc, pcnextbr);
-  pcmux: mux2 generic map(32) port map(pcnextbr, pcjump, jump, pcnext);
-
-  -- register file logic
-  rf: regfile port map(clk, regwrite_WB, instr_ID(25 downto 21), 
-  					   instr_ID(20 downto 16), writereg_WB, 
-  					   result, srca_ID, writedata_ID);
-						 
-  wrmux: mux2 generic map(5) port map(rt_EX, 
-                                      rd_EX, 
-                                      regdst_EX, writereg_EX);	 
-									  
-  resmux: mux2 generic map(32) port map(aluout_WB, readdata_WB, 
-  										memtoreg_WB, result);
   
-  se: signext port map(extSign, instr_ID(15 downto 0), signimm);
+  pcreg: flopr generic map(32) 
+  port map(clk, reset, enable_PCplus4, pcnext, pc);
+  
+  pcadd1: adder 
+  port map(pc, X"00000004", pcplus4);
+  
+  immsh: sl2 
+  port map(signimm_EX, signimmsh);
+  
+  pcadd2: adder 
+  port map(pcplus4_EX, signimmsh, pcbranch);	 
+  
+  -- pcbrmux
+  pcbrmux: mux2 generic map(32) 
+  port map(pcplus4, pcbranch_MEM, pcsrc, pcnextbr);
+   
+  -- pcmux
+  pcmux: mux2 generic map(32) 
+  port map(pcnextbr, pcjump, jump, pcnext);  
+  
+  -- register file logic
+  rf: regfile 
+  port map(clk, regwrite_WB, instr_ID(25 downto 21), 
+  		   instr_ID(20 downto 16), writereg_WB, 
+  		   result, srca_ID, writedata_ID);
+						                                       		 
+  -- wrmux
+  wrmux: mux2 generic map(5) 
+  port map(rt_EX, rd_EX, regdst_EX, writereg_EX); 
+									                           	 
+  -- resmux
+  resmux: mux2 generic map(32) 
+  port map(aluout_WB, readdata_WB, memtoreg_WB, result);
+										  
+  se: signext 
+  port map(extSign, instr_ID(15 downto 0), signimm);
   
   pcsrc <= ((not branch_MEM) and Nbranch_MEM and (not zero)) or 
   		    (branch_MEM and (not Nbranch_MEM) and zero);
@@ -263,13 +301,17 @@ architecture struct of datapath is
 		-- Datapath
 		pcplus4_ID,
 		srca_ID, 
-		writedata_ID,	 
+		writedata_ID,		   
+		instr_ID(31 downto 26),
+		instr_ID(25 downto 21),
 		instr_ID(20 downto 16),
 		instr_ID(15 downto 11),
 		signimm, 	  
 		pcplus4_EX,
 		srca_EX, 
-		writedata_EX,	 
+		writedata_EX,
+		op_EX,
+		rs_EX,
 		rt_EX,
 		rd_EX,
 		signimm_EX,
@@ -304,7 +346,7 @@ architecture struct of datapath is
 		-- Datapath
 		zero_EX,
 		aluout_EX,
-		writedata_EX,
+		writedata_MUX,
 		pcbranch, 
 		writereg_EX,
 		zero,
@@ -347,19 +389,30 @@ architecture struct of datapath is
 		regwrite_WB,
 		memtoreg_WB	
 	);
+
+  FOW: fowarding_unit
+  	port map(
+		op_EX,
+		rs_EX,
+		rt_EX,
+		writereg_MEM,
+		writereg_WB,
+		regwrite_MEM,		
+		regwrite_WB,					 
+		selSrca,
+		selSrcB
+	);
 	
   HZD: hazard_detector
-  port map(
+  	port map(
   		reset,
 		pcsrc,
 		jump,
 		instr_ID(31 downto 26),
 		instr_ID(25 downto 21), 
 		instr_ID(20 downto 16),
-		regwrite_EX,
 		writereg_EX,
-		regwrite_MEM,
-		writereg_MEM,
+		memtoreg_EX,
 		enable_PCplus4,
 		enable_IF_ID,
 		enable_ID_EX,
@@ -367,9 +420,24 @@ architecture struct of datapath is
 		reset_ID_EX,
 		reset_EX_MEM,
 		reset_MEM_WB
-	);
+	); 
   
-  -- ALU logic
-  srcbmux: mux2 generic map(32) port map(writedata_EX, signimm_EX, alusrc_EX, srcb);
-  mainalu: alu port map(srca_EX, srcb, alucontrol_EX, aluout_EX, zero_EX);
+  -- ALU logic	 
+  -- srcbmux
+  srcbmux: mux2 generic map(32) 
+  port map(writedata_MUX, signimm_EX, alusrc_EX, srcb_ALU);
+  
+  with selSrca select
+  srca_ALU <= srca_EX when "00",
+	 	      result  when "01",
+	          aluout  when others;		
+				   
+  with selSrcb select
+  writedata_MUX <= writedata_EX when "00",
+	 	          result  when "01",
+	              aluout  when others;				   
+ 
+  mainalu: alu 
+  port map(srca_ALU, srcb_ALU, alucontrol_EX, aluout_EX, zero_EX);	
+  
 end;
